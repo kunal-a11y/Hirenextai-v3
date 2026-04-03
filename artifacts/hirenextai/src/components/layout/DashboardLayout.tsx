@@ -37,8 +37,6 @@ const jobSeekerNavItems = [
   { href: "/dashboard/resume", icon: ScrollText, label: "Resume Studio" },
   { href: "/dashboard/job-alerts", icon: Bell, label: "Job Alerts" },
   { href: "/dashboard/profile", icon: UserIcon, label: "Profile" },
-  { href: "/dashboard/subscription", icon: CreditCard, label: "Subscription" },
-  { href: "/dashboard/support", icon: MessageCircle, label: "Support" },
 ];
 
 const recruiterNavItems = [
@@ -68,6 +66,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const remindTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [unreadAlerts, setUnreadAlerts] = useState(0);
+  const [language, setLanguage] = useState(localStorage.getItem("hirenext_lang") || "en");
+  const [theme, setTheme] = useState(localStorage.getItem("hirenext_theme") || "system");
 
   const { data: usage } = useGetAIUsage();
   const { data: subscription } = useGetSubscription();
@@ -150,6 +150,22 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       if (remindTimerRef.current) clearTimeout(remindTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem("hirenext_lang", language);
+    document.documentElement.lang = language === "hi" ? "hi" : "en";
+  }, [language]);
+
+  useEffect(() => {
+    localStorage.setItem("hirenext_theme", theme);
+    const root = document.documentElement;
+    if (theme === "dark") root.classList.add("dark");
+    else if (theme === "light") root.classList.remove("dark");
+    else {
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      root.classList.toggle("dark", prefersDark);
+    }
+  }, [theme]);
 
   const handlePopupCompleteNow = () => {
     setShowProfilePopup(false);
@@ -396,6 +412,36 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                           <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-bold uppercase tracking-wide">Admin</span>
                         </Link>
                       )}
+                    </div>
+
+                    <div className="p-2 border-b border-white/[0.07]">
+                      <p className="text-[10px] text-white/40 uppercase tracking-wider px-3 py-1.5 font-semibold">Account</p>
+                      <Link href="/dashboard/subscription" onClick={() => setDropdownOpen(false)} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.09] text-white/80 hover:text-white">
+                        <CreditCard className="w-4 h-4 text-white/50" />
+                        <span className="text-sm font-medium flex-1">Billing</span>
+                      </Link>
+                      <Link href="/dashboard/support" onClick={() => setDropdownOpen(false)} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.09] text-white/80 hover:text-white">
+                        <MessageCircle className="w-4 h-4 text-white/50" />
+                        <span className="text-sm font-medium flex-1">Support</span>
+                      </Link>
+                    </div>
+
+                    <div className="p-3 border-b border-white/[0.07] space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-white/50">Theme</span>
+                        <select value={theme} onChange={(e) => setTheme(e.target.value)} className="bg-white/5 border border-white/10 rounded px-2 py-1 text-xs">
+                          <option value="light">Light</option>
+                          <option value="dark">Dark</option>
+                          <option value="system">System</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-white/50">Language</span>
+                        <select value={language} onChange={(e) => setLanguage(e.target.value)} className="bg-white/5 border border-white/10 rounded px-2 py-1 text-xs">
+                          <option value="en">English</option>
+                          <option value="hi">Hindi</option>
+                        </select>
+                      </div>
                     </div>
 
 
