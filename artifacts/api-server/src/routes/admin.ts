@@ -1,10 +1,11 @@
 import { Router } from "express";
 import {
   db, usersTable, sessionsTable, jobsTable, applicationsTable, supportTicketsTable,
-  creditTransactionsTable,
+  creditTransactionsTable, adminNotificationsTable,
 } from "@workspace/db";
 import { sql, desc, eq, gte, and } from "drizzle-orm";
 import { authenticate, isAdmin, AuthRequest } from "../middlewares/authenticate.js";
+import { sendAdminBroadcastEmail } from "../services/emailService.js";
 
 const router = Router();
 router.use(authenticate, isAdmin);
@@ -226,8 +227,15 @@ router.delete("/user/:id", async (req: AuthRequest, res) => {
 });
 
 // ─── Tickets ──────────────────────────────────────────────────────────────────
-router.get("/tickets", async (_req: AuthRequest, res) => {
-  const tickets = await db
+router.get("/tickets", async (req: AuthRequest, res) => {
+  const status = typeof req.query.status === "string" ? req.query.status : undefined;
+  const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
+
+  const where = status && ["open", "in_progress", "resolved"].includes(status)
+    ? eq(supportTicketsTable.status, status)
+    : undefined;
+
+  let tickets = await db
     .select({
       id: supportTicketsTable.id,
       name: supportTicketsTable.name,
@@ -240,7 +248,32 @@ router.get("/tickets", async (_req: AuthRequest, res) => {
       userId: supportTicketsTable.userId,
     })
     .from(supportTicketsTable)
+    .where(where)
     .orderBy(desc(supportTicketsTable.createdAt));
+
+  tickets = tickets.map((t) => {
+    try {
+      const parsed = JSON.parse(t.subject);
+      return {
+        ...t,
+        subject: parsed?.value ?? t.subject,
+        category: parsed?.category ?? "general",
+      };
+    } catch {
+      return { ...t, category: "general" };
+    }
+  });
+
+  if (query) {
+    const needle = query.toLowerCase();
+    tickets = tickets.filter((t: any) =>
+      t.subject.toLowerCase().includes(needle)
+      || t.name.toLowerCase().includes(needle)
+      || t.email.toLowerCase().includes(needle)
+      || t.category.toLowerCase().includes(needle)
+    );
+  }
+
   res.json(tickets);
 });
 
@@ -259,13 +292,58 @@ router.patch("/ticket/:id/reply", async (req: AuthRequest, res) => {
   if (!existing) { res.status(404).json({ error: "Ticket not found." }); return; }
 
   await db.update(supportTicketsTable)
-    .set({ adminReply: reply.trim(), status: "closed" })
+    .set({ adminReply: reply.trim(), status: "resolved" })
     .where(eq(supportTicketsTable.id, id));
 
   const [updated] = await db.select().from(supportTicketsTable)
     .where(eq(supportTicketsTable.id, id)).limit(1);
 
   res.json({ success: true, ticket: updated });
+});
+
+router.post("/notifications/send", async (req: AuthRequest, res) => {
+  const { title, message, audience = "all", channels = ["in_app"] } = req.body ?? {};
+  if (!title || !message) {
+    res.status(400).json({ error: "Title and message are required." });
+    return;
+  }
+  const validAudience = ["all", "job_seeker", "recruiter"];
+  if (!validAudience.includes(audience)) {
+    res.status(400).json({ error: "Invalid audience." });
+    return;
+  }
+
+  const baseUsersQuery = db.select({ id: usersTable.id, email: usersTable.email, name: usersTable.name, role: usersTable.role })
+    .from(usersTable);
+  const users = audience === "all"
+    ? await baseUsersQuery
+    : await baseUsersQuery.where(eq(usersTable.role, audience));
+
+  if (users.length === 0) {
+    res.json({ success: true, sent: 0 });
+    return;
+  }
+
+  await db.insert(adminNotificationsTable).values(
+    users.map((u) => ({
+      userId: u.id,
+      title: String(title).trim(),
+      message: String(message).trim(),
+      channel: channels.includes("email") ? "email+in_app" : "in_app",
+      audience,
+    }))
+  );
+
+  if (channels.includes("email")) {
+    await Promise.all(users.map((u) => sendAdminBroadcastEmail(u.email, u.name, String(title).trim(), String(message).trim())));
+  }
+
+  res.json({ success: true, sent: users.length });
+});
+
+router.get("/notifications", async (_req: AuthRequest, res) => {
+  const rows = await db.select().from(adminNotificationsTable).orderBy(desc(adminNotificationsTable.createdAt));
+  res.json(rows);
 });
 
 export default router;
