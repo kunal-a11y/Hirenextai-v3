@@ -12,7 +12,7 @@ const basePath = process.env.BASE_PATH?.trim() || "/";
 
 export default defineConfig({
   base: basePath,
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),

@@ -57,12 +57,24 @@ const I18N = {
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const { user, logout, token } = useAuth();
-  const { isDemoMode, demoExpired, disableDemo, clearExpired } = useDemoStore();
+  const { isDemoMode, demoExpired, demoRole, disableDemo, clearExpired } = useDemoStore();
   const isAnyDemoMode = isDemoMode || demoExpired;
   const { toast } = useToast();
-  const isRecruiter = !isAnyDemoMode && user?.role === "recruiter";
+  const isRecruiter = (isAnyDemoMode && demoRole === "recruiter") || (!isAnyDemoMode && user?.role === "recruiter");
   const isAdmin = !isAnyDemoMode && user?.role === "admin";
-  const navItems = isRecruiter ? recruiterNavItems : jobSeekerNavItems;
+  const navItems = (isAnyDemoMode && demoRole === "recruiter")
+    ? [
+      { href: "/demo/recruiter", icon: Building2, label: "Dashboard", exact: true },
+      { href: "/demo/recruiter", icon: Users, label: "Pipeline" },
+      { href: "/demo/recruiter", icon: BarChart3, label: "Analytics" },
+    ]
+    : (isAnyDemoMode && demoRole === "jobseeker")
+    ? [
+      { href: "/demo/jobseeker", icon: Briefcase, label: "Find Jobs", exact: true },
+      { href: "/demo/jobseeker", icon: FileText, label: "Applications" },
+      { href: "/demo/jobseeker", icon: ScrollText, label: "Profile Preview" },
+    ]
+    : (isRecruiter ? recruiterNavItems : jobSeekerNavItems);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showProfilePopup, setShowProfilePopup] = useState(false);
   const [profilePopupShown, setProfilePopupShown] = useState(false);
@@ -225,7 +237,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const currentPage = location.split("/").pop() || "jobs";
   const pageTitle = PAGE_TITLES[currentPage] || "Dashboard";
   const plan = subscription?.plan ?? user?.subscriptionPlan ?? "free";
-  const displayName = isAnyDemoMode ? "Demo User" : (user?.name ?? "User");
+  const displayName = isAnyDemoMode ? (demoRole === "recruiter" ? "Demo Recruiter" : "Demo Job Seeker") : (user?.name ?? "User");
   const displayEmail = isAnyDemoMode ? "demo@hirenextai.com" : (user?.email ?? "");
   const initials = displayName.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 

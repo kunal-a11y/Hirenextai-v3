@@ -34,7 +34,7 @@ export function AuthPromptModal() {
           </div>
 
           <h2 className="text-xl font-display font-bold text-white mb-2">
-            Feature Locked
+            Login required to continue
           </h2>
           <p className="text-white/60 text-sm mb-1 leading-relaxed">
             {authModalFeature
@@ -51,13 +51,13 @@ export function AuthPromptModal() {
               className="btn-primary w-full gap-2"
             >
               <Sparkles className="w-4 h-4" />
-              Create Free Account
+              Sign Up
             </button>
             <button
               onClick={() => handleAuth("/login")}
               className="btn-secondary w-full"
             >
-              Sign In
+              Login
             </button>
           </div>
 

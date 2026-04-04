@@ -6,7 +6,7 @@ import {
   Sparkles, Zap, BrainCircuit, Target, Briefcase, ArrowRight,
   Star, Shield, CheckCircle2, MessageSquare, FileSearch, Users,
   TrendingUp, Award, Lock, ChevronDown, Github, Linkedin,
-  MapPin, IndianRupee,
+  MapPin, IndianRupee, X,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useDemoStore } from "@/store/demo";
@@ -64,6 +64,7 @@ export default function Landing() {
   const { enableDemo } = useDemoStore();
   const [, setLocation] = useLocation();
   const [demoLoading, setDemoLoading] = useState(false);
+  const [showRoleModal, setShowRoleModal] = useState(false);
 
   const typedText = useTypingText(
     ["Smarter with AI", "Faster with AI", "Smarter — Not Harder"],
@@ -71,10 +72,20 @@ export default function Landing() {
     2200
   );
 
-  const handleDemo = () => {
+  const startDemo = (role: "jobseeker" | "recruiter") => {
     setDemoLoading(true);
-    enableDemo();
-    setLocation("/dashboard/jobs");
+    enableDemo(role);
+    setShowRoleModal(false);
+    setLocation(role === "recruiter" ? "/demo/recruiter?demo=true" : "/demo/jobseeker?demo=true");
+  };
+
+  const handleDemo = () => {
+    const saved = localStorage.getItem("demo_role");
+    if (saved === "jobseeker" || saved === "recruiter") {
+      startDemo(saved);
+      return;
+    }
+    setShowRoleModal(true);
   };
 
   const featureCards = [
@@ -469,6 +480,42 @@ export default function Landing() {
       </section>
 
       <Footer />
+
+      {showRoleModal && (
+        <div className="fixed inset-0 z-[300] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl bg-[#0f0f1a] border border-white/10 rounded-3xl shadow-2xl p-6 md:p-8 relative">
+            <button onClick={() => setShowRoleModal(false)} className="absolute right-4 top-4 p-2 rounded-lg text-white/40 hover:text-white hover:bg-white/10">
+              <X className="w-4 h-4" />
+            </button>
+            <h3 className="text-2xl font-display font-bold text-white text-center mb-2">Choose your role</h3>
+            <p className="text-white/50 text-center mb-6">Select a guided demo experience.</p>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <button
+                onClick={() => startDemo("jobseeker")}
+                className="text-left p-6 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
+              >
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center mb-4">
+                  <Briefcase className="w-5 h-5 text-indigo-400" />
+                </div>
+                <h4 className="text-lg font-semibold text-white mb-1">Job Seeker</h4>
+                <p className="text-sm text-white/55">Find jobs and track applications</p>
+              </button>
+
+              <button
+                onClick={() => startDemo("recruiter")}
+                className="text-left p-6 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
+              >
+                <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center mb-4">
+                  <Users className="w-5 h-5 text-purple-400" />
+                </div>
+                <h4 className="text-lg font-semibold text-white mb-1">Recruiter</h4>
+                <p className="text-sm text-white/55">Post jobs and manage candidates</p>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

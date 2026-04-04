@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useDemoStore } from "@/store/demo";
 
-const DEMO_DURATION_MS = 120_000; // 2 minutes
+const DEMO_DURATION_MS = 300_000; // 5 minutes
 
 export function useDemoTimeout() {
   const { isDemoMode, demoStartTime, demoExpired, expireDemo } = useDemoStore();
