@@ -4,10 +4,10 @@ import { Zap, LogOut, UserPlus, Clock } from "lucide-react";
 import { useDemoStore } from "@/store/demo";
 import { useAuthStore } from "@/hooks/use-auth";
 
-const DEMO_DURATION_MS = 120_000; // 2 minutes
+const DEMO_DURATION_MS = 300_000; // 5 minutes
 
 function useCountdown(demoStartTime: number | null): string {
-  const [label, setLabel] = useState("2:00");
+  const [label, setLabel] = useState("5:00");
 
   useEffect(() => {
     if (!demoStartTime) return;
