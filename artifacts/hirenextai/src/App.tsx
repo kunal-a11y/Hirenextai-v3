@@ -39,6 +39,8 @@ import RecruiterSubscription from "@/pages/dashboard/recruiter/RecruiterSubscrip
 import JobAlerts from "@/pages/dashboard/JobAlerts";
 import SavedJobs from "@/pages/dashboard/SavedJobs";
 import Support from "@/pages/dashboard/support";
+import JobSeekerDemo from "@/pages/demo/JobSeekerDemo";
+import RecruiterDemoPage from "@/pages/demo/RecruiterDemo";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminUsers from "@/pages/admin/AdminUsers";
 import RefundPolicy from "@/pages/RefundPolicy";
@@ -213,6 +215,35 @@ function DashboardIndex() {
   )
 }
 
+function DemoRoute({ component: Component, role }: { component: React.ComponentType; role: "jobseeker" | "recruiter" }) {
+  const { isDemoMode, demoExpired, enableDemo } = useDemoStore();
+  const [location, setLocation] = useLocation();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const demoFromQuery = params.get("demo") === "true";
+    const savedMode = localStorage.getItem("demo_mode") === "true" || localStorage.getItem("hirenext_demo_mode") === "true";
+    if ((demoFromQuery || savedMode) && !isDemoMode && !demoExpired) {
+      enableDemo(role);
+      return;
+    }
+    if (!isDemoMode && !demoExpired) {
+      setLocation("/");
+      return;
+    }
+    const savedRole = localStorage.getItem("demo_role");
+    if (savedRole && savedRole !== role) {
+      setLocation(savedRole === "recruiter" ? "/demo/recruiter?demo=true" : "/demo/jobseeker?demo=true");
+    }
+  }, [isDemoMode, demoExpired, role, setLocation, enableDemo, location]);
+
+  return (
+    <DashboardLayout>
+      <Component />
+    </DashboardLayout>
+  );
+}
+
 function ScrollToTop() {
   const [pathname] = useLocation();
   useLayoutEffect(() => {
@@ -256,6 +287,8 @@ function Router() {
       <Route path="/dashboard/job-alerts" component={() => <ProtectedRoute component={JobAlerts} />} />
       <Route path="/dashboard/saved-jobs" component={() => <ProtectedRoute component={SavedJobs} />} />
       <Route path="/dashboard/support" component={() => <ProtectedRoute component={Support} />} />
+      <Route path="/demo/jobseeker" component={() => <DemoRoute component={JobSeekerDemo} role="jobseeker" />} />
+      <Route path="/demo/recruiter" component={() => <DemoRoute component={RecruiterDemoPage} role="recruiter" />} />
       <Route path="/dashboard/admin/users" component={() => <AdminRoute component={AdminUsers} />} />
       <Route path="/dashboard/admin/tickets" component={() => <AdminRoute component={AdminDashboard} />} />
       <Route path="/dashboard/admin/credits" component={() => <AdminRoute component={AdminDashboard} />} />
