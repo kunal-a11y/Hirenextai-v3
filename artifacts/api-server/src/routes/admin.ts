@@ -229,11 +229,13 @@ router.delete("/user/:id", async (req: AuthRequest, res) => {
 // ─── Tickets ──────────────────────────────────────────────────────────────────
 router.get("/tickets", async (req: AuthRequest, res) => {
   const status = typeof req.query.status === "string" ? req.query.status : undefined;
+  const category = typeof req.query.category === "string" ? req.query.category : undefined;
   const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
 
-  const where = status && ["open", "in_progress", "resolved"].includes(status)
-    ? eq(supportTicketsTable.status, status)
-    : undefined;
+  const conditions: any[] = [];
+  if (status && ["open", "in_progress", "resolved"].includes(status)) conditions.push(eq(supportTicketsTable.status, status));
+  if (category && ["bug", "payment", "account", "general"].includes(category)) conditions.push(eq(supportTicketsTable.category, category));
+  const where = conditions.length > 1 ? and(...conditions) : conditions[0];
 
   let tickets = await db
     .select({
@@ -241,6 +243,7 @@ router.get("/tickets", async (req: AuthRequest, res) => {
       name: supportTicketsTable.name,
       email: supportTicketsTable.email,
       subject: supportTicketsTable.subject,
+      category: supportTicketsTable.category,
       message: supportTicketsTable.message,
       status: supportTicketsTable.status,
       adminReply: supportTicketsTable.adminReply,
@@ -250,19 +253,6 @@ router.get("/tickets", async (req: AuthRequest, res) => {
     .from(supportTicketsTable)
     .where(where)
     .orderBy(desc(supportTicketsTable.createdAt));
-
-  tickets = tickets.map((t) => {
-    try {
-      const parsed = JSON.parse(t.subject);
-      return {
-        ...t,
-        subject: parsed?.value ?? t.subject,
-        category: parsed?.category ?? "general",
-      };
-    } catch {
-      return { ...t, category: "general" };
-    }
-  });
 
   if (query) {
     const needle = query.toLowerCase();
@@ -299,6 +289,18 @@ router.patch("/ticket/:id/reply", async (req: AuthRequest, res) => {
     .where(eq(supportTicketsTable.id, id)).limit(1);
 
   res.json({ success: true, ticket: updated });
+});
+
+router.patch("/ticket/:id/status", async (req: AuthRequest, res) => {
+  const id = parseInt(req.params.id, 10);
+  const status = String(req.body?.status ?? "");
+  if (isNaN(id) || !["open", "in_progress", "resolved"].includes(status)) {
+    res.status(400).json({ error: "Invalid ticket ID or status." });
+    return;
+  }
+  await db.update(supportTicketsTable).set({ status }).where(eq(supportTicketsTable.id, id));
+  const [ticket] = await db.select().from(supportTicketsTable).where(eq(supportTicketsTable.id, id)).limit(1);
+  res.json({ success: true, ticket });
 });
 
 router.post("/notifications/send", async (req: AuthRequest, res) => {

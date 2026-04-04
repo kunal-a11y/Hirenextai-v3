@@ -30,6 +30,36 @@ interface TicketMessage {
 }
 
 const API = import.meta.env.VITE_API_URL ?? "/api";
+const TEXT = {
+  en: {
+    title: "Support Center",
+    subtitle: "Submit issues, track status, and chat with support.",
+    create: "Create Ticket",
+    monthly: "Monthly Tickets",
+    yourTickets: "Your Tickets",
+    conversation: "Conversation",
+    submit: "Submit Ticket",
+    loading: "Loading tickets...",
+    empty: "No tickets yet.",
+    selectTicket: "Select a ticket to view thread.",
+    reply: "Reply...",
+    resolve: "Mark as Resolved",
+  },
+  hi: {
+    title: "सपोर्ट सेंटर",
+    subtitle: "समस्या भेजें, स्थिति ट्रैक करें और सपोर्ट से चैट करें।",
+    create: "टिकट बनाएं",
+    monthly: "मासिक टिकट",
+    yourTickets: "आपके टिकट",
+    conversation: "वार्तालाप",
+    submit: "टिकट सबमिट करें",
+    loading: "टिकट लोड हो रहे हैं...",
+    empty: "अभी कोई टिकट नहीं है।",
+    selectTicket: "थ्रेड देखने के लिए टिकट चुनें।",
+    reply: "जवाब लिखें...",
+    resolve: "Resolved चिह्नित करें",
+  }
+} as const;
 
 export default function Support() {
   const { token } = useAuth();
@@ -41,6 +71,8 @@ export default function Support() {
   const [messages, setMessages] = useState<TicketMessage[]>([]);
   const [reply, setReply] = useState("");
   const [form, setForm] = useState({ subject: "", message: "", category: "bug" as TicketCategory });
+  const lang = (localStorage.getItem("hirenext_lang") === "hi" ? "hi" : "en") as "en" | "hi";
+  const t = TEXT[lang];
 
   const headers = {
     "Content-Type": "application/json",
@@ -139,13 +171,13 @@ export default function Support() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Support Center</h1>
-        <p className="text-sm text-white/50">Submit issues, track status, and chat with support.</p>
+        <h1 className="text-2xl font-bold text-white">{t.title}</h1>
+        <p className="text-sm text-white/50">{t.subtitle}</p>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
         <Card className="glass-card lg:col-span-1">
-          <CardHeader><CardTitle>Create Ticket</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t.create}</CardTitle></CardHeader>
           <CardContent>
             <form onSubmit={submitTicket} className="space-y-3">
               <Select value={form.category} onValueChange={(value) => setForm((p) => ({ ...p, category: value as TicketCategory }))}>
@@ -160,14 +192,14 @@ export default function Support() {
               <Input placeholder="Subject" value={form.subject} onChange={(e) => setForm((p) => ({ ...p, subject: e.target.value }))} />
               <Textarea placeholder="Describe your issue" value={form.message} onChange={(e) => setForm((p) => ({ ...p, message: e.target.value }))} />
               <Button disabled={submitting} className="w-full">
-                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Submit Ticket"}
+                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : t.submit}
               </Button>
             </form>
           </CardContent>
         </Card>
 
         <Card className="glass-card lg:col-span-2">
-          <CardHeader><CardTitle>Monthly Tickets</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t.monthly}</CardTitle></CardHeader>
           <CardContent className="h-[220px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyData}>
@@ -183,9 +215,9 @@ export default function Support() {
 
       <div className="grid lg:grid-cols-2 gap-6">
         <Card className="glass-card">
-          <CardHeader><CardTitle>Your Tickets</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t.yourTickets}</CardTitle></CardHeader>
           <CardContent className="space-y-3 max-h-[420px] overflow-y-auto">
-            {loading ? <p className="text-white/40 text-sm">Loading tickets...</p> : tickets.length === 0 ? <p className="text-white/40 text-sm">No tickets yet.</p> : tickets.map((ticket) => (
+            {loading ? <p className="text-white/40 text-sm">{t.loading}</p> : tickets.length === 0 ? <p className="text-white/40 text-sm">{t.empty}</p> : tickets.map((ticket) => (
               <button key={ticket.id} onClick={() => openTicket(ticket)} className="w-full text-left p-3 rounded-xl border border-white/10 hover:bg-white/5">
                 <div className="flex items-center justify-between gap-2">
                   <p className="font-medium text-white truncate">{ticket.subject}</p>
@@ -198,9 +230,9 @@ export default function Support() {
         </Card>
 
         <Card className="glass-card">
-          <CardHeader><CardTitle>{selected ? `Ticket #${selected.id}` : "Conversation"}</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{selected ? `Ticket #${selected.id}` : t.conversation}</CardTitle></CardHeader>
           <CardContent>
-            {!selected ? <p className="text-white/40 text-sm">Select a ticket to view thread.</p> : (
+            {!selected ? <p className="text-white/40 text-sm">{t.selectTicket}</p> : (
               <div className="space-y-3">
                 <div className="max-h-[280px] overflow-y-auto space-y-2">
                   {messages.map((m) => (
@@ -210,11 +242,11 @@ export default function Support() {
                   ))}
                 </div>
                 <div className="flex gap-2">
-                  <Input value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Reply..." />
+                  <Input value={reply} onChange={(e) => setReply(e.target.value)} placeholder={t.reply} />
                   <Button onClick={sendReply} size="icon"><Send className="w-4 h-4" /></Button>
                 </div>
                 {selected.status !== "resolved" && (
-                  <Button variant="outline" onClick={closeTicket} className="w-full">Mark as Resolved</Button>
+                  <Button variant="outline" onClick={closeTicket} className="w-full">{t.resolve}</Button>
                 )}
               </div>
             )}

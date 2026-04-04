@@ -21,6 +21,7 @@ interface Ticket {
   subject: string;
   message: string;
   status: string;
+  category?: string;
   adminReply: string | null;
   createdAt: string;
   userId: number | null;
@@ -41,14 +42,17 @@ interface GrowthRow { month: string; count: number }
 
 function StatusBadge({ status }: { status: string }) {
   const open = status === "open";
+  const inProgress = status === "in_progress";
   return (
     <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
       open
         ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+        : inProgress
+        ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
         : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
     }`}>
-      {open ? <AlertCircle className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />}
-      {open ? "Open" : "Closed"}
+      {open ? <AlertCircle className="w-3 h-3" /> : inProgress ? <Clock className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />}
+      {open ? "Open" : inProgress ? "In Progress" : "Resolved"}
     </span>
   );
 }
@@ -102,7 +106,7 @@ export default function AdminDashboard() {
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "closed">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "in_progress" | "resolved">("all");
   const [ticketGrowth, setTicketGrowth] = useState<GrowthRow[]>([]);
   const [broadcast, setBroadcast] = useState({ title: "", message: "", audience: "all", email: true });
 
@@ -145,9 +149,9 @@ export default function AdminDashboard() {
         body: JSON.stringify({ reply }),
       });
       if (!res.ok) throw new Error();
-      toast({ title: "Reply sent", description: "Ticket marked as closed." });
+      toast({ title: "Reply sent", description: "Ticket marked as resolved." });
       setTickets(prev =>
-        prev.map(t => t.id === selectedTicket.id ? { ...t, adminReply: reply, status: "closed" } : t)
+        prev.map(t => t.id === selectedTicket.id ? { ...t, adminReply: reply, status: "resolved" } : t)
       );
       setSelectedTicket(null);
       setReply("");
@@ -306,7 +310,7 @@ export default function AdminDashboard() {
             Support Tickets
           </h2>
           <div className="flex gap-1">
-            {(["all", "open", "closed"] as const).map(f => (
+            {(["all", "open", "in_progress", "resolved"] as const).map(f => (
               <button
                 key={f}
                 onClick={() => setStatusFilter(f)}

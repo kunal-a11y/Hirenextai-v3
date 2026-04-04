@@ -8,21 +8,14 @@ const router = Router();
 
 const VALID_CATEGORIES = new Set(["bug", "payment", "account", "general"]);
 const VALID_STATUSES = new Set(["open", "in_progress", "resolved"]);
-function parseTicketSubject(raw: string): { value: string; category: string } {
-  try {
-    const parsed = JSON.parse(raw);
-    return { value: parsed?.value ?? raw, category: parsed?.category ?? "general" };
-  } catch {
-    return { value: raw, category: "general" };
-  }
-}
 
 router.get("/tickets", authenticate, async (req: AuthRequest, res) => {
   const status = typeof req.query.status === "string" ? req.query.status : undefined;
-  const where =
-    status && VALID_STATUSES.has(status)
-      ? and(eq(supportTicketsTable.userId, req.userId!), eq(supportTicketsTable.status, status))
-      : eq(supportTicketsTable.userId, req.userId!);
+  const category = typeof req.query.category === "string" ? req.query.category : undefined;
+  const conditions: any[] = [eq(supportTicketsTable.userId, req.userId!)];
+  if (status && VALID_STATUSES.has(status)) conditions.push(eq(supportTicketsTable.status, status));
+  if (category && VALID_CATEGORIES.has(category)) conditions.push(eq(supportTicketsTable.category, category));
+  const where = conditions.length > 1 ? and(...conditions) : conditions[0];
 
   const tickets = await db
     .select({
@@ -31,7 +24,7 @@ router.get("/tickets", authenticate, async (req: AuthRequest, res) => {
       message: supportTicketsTable.message,
       status: supportTicketsTable.status,
       createdAt: supportTicketsTable.createdAt,
-      category: sql<string>`COALESCE(JSON_UNQUOTE(JSON_EXTRACT(${supportTicketsTable.subject}, '$.category')), 'general')`,
+      category: supportTicketsTable.category,
     })
     .from(supportTicketsTable)
     .where(where)
@@ -58,12 +51,12 @@ router.post("/tickets", authenticate, async (req: AuthRequest, res) => {
     return;
   }
 
-  const wrappedSubject = JSON.stringify({ value: subject.trim(), category: normalizedCategory });
   const created = await db.insert(supportTicketsTable).values({
     userId: user.id,
     name: user.name,
     email: user.email,
-    subject: wrappedSubject,
+    subject: subject.trim(),
+    category: normalizedCategory,
     message: String(message).trim(),
     status: "open",
   });
@@ -143,8 +136,7 @@ router.post("/tickets/:id/messages", authenticate, async (req: AuthRequest, res)
   }).where(eq(supportTicketsTable.id, id));
 
   if (safeSender === "admin") {
-    const parsed = parseTicketSubject(ticket.subject);
-    await sendSupportReplyEmail(ticket.email, ticket.name, parsed.value || "Support Ticket", String(message).trim());
+    await sendSupportReplyEmail(ticket.email, ticket.name, ticket.subject || "Support Ticket", String(message).trim());
   }
 
   res.json({ success: true });
