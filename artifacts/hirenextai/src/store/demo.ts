@@ -2,12 +2,13 @@ import { create } from "zustand";
 
 interface DemoState {
   isDemoMode: boolean;
+  demoRole: "jobseeker" | "recruiter" | null;
   showAuthModal: boolean;
   authModalFeature: string;
   demoStartTime: number | null;
   demoExpired: boolean;
 
-  enableDemo: () => void;
+  enableDemo: (role?: "jobseeker" | "recruiter") => void;
   disableDemo: () => void;
   openAuthModal: (feature: string) => void;
   closeAuthModal: () => void;
@@ -16,6 +17,8 @@ interface DemoState {
 }
 
 const DEMO_MODE_KEY = "hirenext_demo_mode";
+const DEMO_MODE_PUBLIC_KEY = "demo_mode";
+const DEMO_ROLE_KEY = "demo_role";
 const DEMO_START_KEY = "demoStartTime";
 const DEMO_EXPIRED_KEY = "demoExpired";
 const DEMO_USER_KEY = "demoUser";
@@ -32,31 +35,37 @@ function readDemoExpired(): boolean {
 }
 
 export const useDemoStore = create<DemoState>((set) => ({
-  isDemoMode: localStorage.getItem(DEMO_MODE_KEY) === "true",
+  isDemoMode: localStorage.getItem(DEMO_MODE_KEY) === "true" || localStorage.getItem(DEMO_MODE_PUBLIC_KEY) === "true",
+  demoRole: (localStorage.getItem(DEMO_ROLE_KEY) as "jobseeker" | "recruiter" | null) ?? null,
   showAuthModal: false,
   authModalFeature: "",
   demoStartTime: readDemoStart(),
   demoExpired: readDemoExpired(),
 
-  enableDemo: () => {
+  enableDemo: (role = "jobseeker") => {
     const now = Date.now();
     localStorage.setItem(DEMO_MODE_KEY, "true");
+    localStorage.setItem(DEMO_MODE_PUBLIC_KEY, "true");
+    localStorage.setItem(DEMO_ROLE_KEY, role);
     localStorage.setItem(DEMO_START_KEY, String(now));
     localStorage.removeItem(DEMO_EXPIRED_KEY);
-    set({ isDemoMode: true, demoStartTime: now, demoExpired: false });
+    set({ isDemoMode: true, demoRole: role, demoStartTime: now, demoExpired: false });
   },
 
   disableDemo: () => {
     localStorage.removeItem(DEMO_MODE_KEY);
+    localStorage.removeItem(DEMO_MODE_PUBLIC_KEY);
+    localStorage.removeItem(DEMO_ROLE_KEY);
     localStorage.removeItem(DEMO_START_KEY);
     localStorage.removeItem(DEMO_EXPIRED_KEY);
     localStorage.removeItem(DEMO_USER_KEY);
-    set({ isDemoMode: false, showAuthModal: false, demoStartTime: null, demoExpired: false });
+    set({ isDemoMode: false, demoRole: null, showAuthModal: false, demoStartTime: null, demoExpired: false });
   },
 
   expireDemo: () => {
     localStorage.setItem(DEMO_EXPIRED_KEY, "true");
     localStorage.removeItem(DEMO_MODE_KEY);
+    localStorage.removeItem(DEMO_MODE_PUBLIC_KEY);
     localStorage.removeItem(DEMO_USER_KEY);
     set({ isDemoMode: false, demoExpired: true });
   },

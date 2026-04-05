@@ -14,6 +14,8 @@ import { Logo } from "@/components/Logo";
 import { useDemoStore } from "@/store/demo";
 import { useToast } from "@/hooks/use-toast";
 import { FloatingChat } from "@/components/FloatingChat";
+import { useAppLanguage } from "@/lib/i18n";
+import { canUserSeeBroadcast, readLatestBroadcast, type InAppBroadcast } from "@/lib/broadcast";
 
 const PAGE_TITLES: Record<string, string> = {
   jobs: "Find Jobs",
@@ -37,8 +39,6 @@ const jobSeekerNavItems = [
   { href: "/dashboard/resume", icon: ScrollText, label: "Resume Studio" },
   { href: "/dashboard/job-alerts", icon: Bell, label: "Job Alerts" },
   { href: "/dashboard/profile", icon: UserIcon, label: "Profile" },
-  { href: "/dashboard/subscription", icon: CreditCard, label: "Subscription" },
-  { href: "/dashboard/support", icon: MessageCircle, label: "Support" },
 ];
 
 const recruiterNavItems = [
@@ -51,16 +51,27 @@ const recruiterNavItems = [
 ];
 
 const API = import.meta.env.VITE_API_URL ?? "/api";
-
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const { user, logout, token } = useAuth();
-  const { isDemoMode, demoExpired, disableDemo, clearExpired } = useDemoStore();
+  const { isDemoMode, demoExpired, demoRole, disableDemo, clearExpired } = useDemoStore();
   const isAnyDemoMode = isDemoMode || demoExpired;
   const { toast } = useToast();
-  const isRecruiter = !isAnyDemoMode && user?.role === "recruiter";
+  const isRecruiter = (isAnyDemoMode && demoRole === "recruiter") || (!isAnyDemoMode && user?.role === "recruiter");
   const isAdmin = !isAnyDemoMode && user?.role === "admin";
-  const navItems = isRecruiter ? recruiterNavItems : jobSeekerNavItems;
+  const navItems = (isAnyDemoMode && demoRole === "recruiter")
+    ? [
+      { href: "/demo/recruiter", icon: Building2, label: "Dashboard", exact: true },
+      { href: "/demo/recruiter", icon: Users, label: "Pipeline" },
+      { href: "/demo/recruiter", icon: BarChart3, label: "Analytics" },
+    ]
+    : (isAnyDemoMode && demoRole === "jobseeker")
+    ? [
+      { href: "/demo/jobseeker", icon: Briefcase, label: "Find Jobs", exact: true },
+      { href: "/demo/jobseeker", icon: FileText, label: "Applications" },
+      { href: "/demo/jobseeker", icon: ScrollText, label: "Profile Preview" },
+    ]
+    : (isRecruiter ? recruiterNavItems : jobSeekerNavItems);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showProfilePopup, setShowProfilePopup] = useState(false);
   const [profilePopupShown, setProfilePopupShown] = useState(false);
@@ -68,6 +79,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const remindTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [unreadAlerts, setUnreadAlerts] = useState(0);
+  const { language, setLanguage, t } = useAppLanguage();
+  const [theme, setTheme] = useState(localStorage.getItem("hirenext_theme") || "system");
+  const [languageQuery, setLanguageQuery] = useState<string>(language);
+  const [activeBroadcast, setActiveBroadcast] = useState<InAppBroadcast | null>(null);
 
   const { data: usage } = useGetAIUsage();
   const { data: subscription } = useGetSubscription();
@@ -151,6 +166,49 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    localStorage.setItem("hirenext_theme", theme);
+    const root = document.documentElement;
+    if (theme === "dark") root.classList.add("dark");
+    else if (theme === "light") root.classList.remove("dark");
+    else {
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      root.classList.toggle("dark", prefersDark);
+    }
+  }, [theme]);
+
+  useEffect(() => {
+    const maybeShow = (notification: InAppBroadcast | null) => {
+      if (!notification || isAnyDemoMode) return;
+      if (!canUserSeeBroadcast(notification.audience, user?.role)) return;
+      const seenKey = `hirenext_broadcast_seen_${notification.id}`;
+      if (localStorage.getItem(seenKey)) return;
+      setActiveBroadcast(notification);
+      localStorage.setItem(seenKey, "1");
+    };
+
+    maybeShow(readLatestBroadcast());
+
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === "hirenext_in_app_broadcast") {
+        maybeShow(readLatestBroadcast());
+      }
+    };
+    const onBroadcast = () => maybeShow(readLatestBroadcast());
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("hirenext:broadcast", onBroadcast as EventListener);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("hirenext:broadcast", onBroadcast as EventListener);
+    };
+  }, [isAnyDemoMode, user?.role]);
+
+  useEffect(() => {
+    if (!activeBroadcast) return;
+    const timer = window.setTimeout(() => setActiveBroadcast(null), activeBroadcast.durationMs);
+    return () => window.clearTimeout(timer);
+  }, [activeBroadcast]);
+
   const handlePopupCompleteNow = () => {
     setShowProfilePopup(false);
     if (remindTimerRef.current) {
@@ -204,9 +262,22 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const currentPage = location.split("/").pop() || "jobs";
   const pageTitle = PAGE_TITLES[currentPage] || "Dashboard";
   const plan = subscription?.plan ?? user?.subscriptionPlan ?? "free";
-  const displayName = isAnyDemoMode ? "Demo User" : (user?.name ?? "User");
+  const displayName = isAnyDemoMode ? (demoRole === "recruiter" ? "Demo Recruiter" : "Demo Job Seeker") : (user?.name ?? "User");
   const displayEmail = isAnyDemoMode ? "demo@hirenextai.com" : (user?.email ?? "");
-  const initials = displayName.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+  const initials = displayName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
+
+  const LANGUAGE_OPTIONS = [
+    { code: "en", label: "English" },
+    { code: "hi", label: "Hindi (हिंदी)" },
+    { code: "bn", label: "Bengali (বাংলা)" },
+    { code: "ta", label: "Tamil (தமிழ்)" },
+    { code: "te", label: "Telugu (తెలుగు)" },
+    { code: "mr", label: "Marathi (मराठी)" },
+  ] as const;
+
+  useEffect(() => {
+    setLanguageQuery(language);
+  }, [language]);
 
   const PlanBadge = ({ size = "sm" }: { size?: "xs" | "sm" }) => {
     const colors: Record<string, string> = {
@@ -236,9 +307,27 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         />
       )}
 
+      {activeBroadcast && (
+        <div className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-primary/30 bg-popover p-6 shadow-2xl">
+            <p className="text-xs uppercase tracking-widest text-primary font-bold mb-2">Platform Update</p>
+            <h2 className="text-2xl font-bold text-foreground">{activeBroadcast.title}</h2>
+            <p className="mt-3 text-base text-foreground/90 whitespace-pre-wrap">{activeBroadcast.message}</p>
+            <div className="mt-5 flex items-center justify-between text-xs text-muted-foreground">
+              <span>Auto closes in {Math.round(activeBroadcast.durationMs / 1000)}s</span>
+              {activeBroadcast.dismissible && (
+                <button onClick={() => setActiveBroadcast(null)} className="px-3 py-1.5 rounded-lg border border-border hover:bg-muted text-foreground">
+                  Dismiss
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-1 flex-col bg-background overflow-hidden min-h-0">
         {/* Top Navigation Bar */}
-        <header className="sticky top-0 h-14 shrink-0 z-40 border-b border-white/[0.07] bg-[#0a0a14]/80 backdrop-blur-[12px]">
+        <header className="sticky top-0 h-14 shrink-0 z-40 border-b border-border/80 bg-background/95 backdrop-blur-[12px]">
           <div className="h-full max-w-[1200px] mx-auto px-4 flex items-center gap-2">
 
             {/* Logo — always visible, never shrinks */}
@@ -259,11 +348,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[13px] font-medium transition-all duration-200 whitespace-nowrap ${
                       isActive
                         ? "bg-primary/[0.12] text-primary"
-                        : "text-white/60 hover:text-white hover:bg-white/[0.08]"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
                     }`}
                   >
                     <span className="relative shrink-0">
-                      <item.icon className={`w-3.5 h-3.5 ${isActive ? "text-primary" : "text-white/50"}`} />
+                      <item.icon className={`w-3.5 h-3.5 ${isActive ? "text-primary" : "text-muted-foreground"}`} />
                       {showBadge && (
                         <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 flex items-center justify-center rounded-full bg-indigo-500 text-[8px] font-bold text-white leading-none">
                           {unreadAlerts > 9 ? "9+" : unreadAlerts}
@@ -280,7 +369,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[13px] font-medium transition-all duration-200 whitespace-nowrap ${
                     location.startsWith("/dashboard/admin")
                       ? "bg-red-500/[0.12] text-red-400"
-                      : "text-red-400/60 hover:text-red-400 hover:bg-red-500/[0.08]"
+                      : "text-red-500/80 hover:text-red-500 hover:bg-red-500/[0.08]"
                   }`}
                 >
                   <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
@@ -326,12 +415,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 <button
                   onClick={() => setDropdownOpen(!dropdownOpen)}
                   title="Profile Settings"
-                  className="flex items-center gap-1.5 px-1.5 py-1.5 rounded-xl hover:bg-white/[0.08] border border-transparent hover:border-white/[0.12] transition-all duration-200"
+                  className="flex items-center gap-1.5 px-1.5 py-1.5 rounded-xl hover:bg-muted border border-transparent hover:border-border transition-all duration-200"
                 >
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center text-xs font-bold text-white shrink-0">
                     {initials}
                   </div>
-                  <ChevronDown className={`w-3.5 h-3.5 text-white/40 transition-transform duration-200 hidden sm:block ${dropdownOpen ? "rotate-180" : ""}`} />
+                  <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform duration-200 hidden sm:block ${dropdownOpen ? "rotate-180" : ""}`} />
                 </button>
 
               <AnimatePresence>
@@ -344,22 +433,22 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     className="absolute right-0 top-full mt-2 w-80 glass-panel rounded-2xl border border-white/10 shadow-2xl z-50 flex flex-col max-h-[calc(100vh-5rem)] overflow-y-auto overflow-x-hidden"
                   >
                     {/* User Info Header */}
-                    <div className="p-4 border-b border-white/[0.07]">
+                    <div className="p-4 border-b border-border/80">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center text-sm font-bold text-white shrink-0">
                           {initials}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-white text-sm truncate">{displayName}</p>
-                          <p className="text-xs text-white/40 truncate">{displayEmail}</p>
+                          <p className="font-semibold text-foreground text-sm truncate">{displayName}</p>
+                          <p className="text-xs text-muted-foreground truncate">{displayEmail}</p>
                         </div>
                         <PlanBadge size="xs" />
                       </div>
                     </div>
 
                     {/* Nav items inside dropdown */}
-                    <div className="p-2 border-b border-white/[0.07]">
-                      <p className="text-[10px] text-white/40 uppercase tracking-wider px-3 py-1.5 font-semibold">Navigate</p>
+                    <div className="p-2 border-b border-border/80">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider px-3 py-1.5 font-semibold">Navigate</p>
                       {navItems.map((item) => {
                         const isActive = (item as any).exact ? location === item.href : location.startsWith(item.href);
                         return (
@@ -368,10 +457,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                             href={item.href}
                             onClick={() => setDropdownOpen(false)}
                             className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors group w-full ${
-                              isActive ? "bg-primary/[0.12] text-primary" : "hover:bg-white/[0.09] text-white/80 hover:text-white"
+                              isActive ? "bg-primary/[0.12] text-primary" : "hover:bg-muted text-muted-foreground hover:text-foreground"
                             }`}
                           >
-                            <item.icon className={`w-4 h-4 ${isActive ? "text-primary" : "text-white/50 group-hover:text-white/80"}`} />
+                            <item.icon className={`w-4 h-4 ${isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"}`} />
                             <span className="text-sm font-medium flex-1">{item.label}</span>
                             {false && (
                               <span className="hidden">
@@ -388,14 +477,61 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                           className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors group w-full mt-1 ${
                             location.startsWith("/dashboard/admin")
                               ? "bg-red-500/[0.15] text-red-400"
-                              : "hover:bg-white/[0.09] text-white/80 hover:text-white"
+                              : "hover:bg-muted text-muted-foreground hover:text-foreground"
                           }`}
                         >
-                          <ShieldAlert className={`w-4 h-4 ${location.startsWith("/dashboard/admin") ? "text-red-400" : "text-white/50 group-hover:text-white/80"}`} />
+                          <ShieldAlert className={`w-4 h-4 ${location.startsWith("/dashboard/admin") ? "text-red-400" : "text-muted-foreground group-hover:text-foreground"}`} />
                           <span className="text-sm font-medium flex-1">Admin Panel</span>
                           <span className="text-[9px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-bold uppercase tracking-wide">Admin</span>
                         </Link>
                       )}
+                    </div>
+
+                    <div className="p-2 border-b border-border/80">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider px-3 py-1.5 font-semibold">{t.account}</p>
+                      <Link href="/dashboard/subscription" onClick={() => setDropdownOpen(false)} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground">
+                        <CreditCard className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm font-medium flex-1">{t.billing}</span>
+                      </Link>
+                      <Link href="/dashboard/support" onClick={() => setDropdownOpen(false)} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground">
+                        <MessageCircle className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm font-medium flex-1">{t.support}</span>
+                      </Link>
+                    </div>
+
+                    <div className="p-3 border-b border-border/80 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-white/50">{t.theme}</span>
+                        <select value={theme} onChange={(e) => setTheme(e.target.value)} className="bg-input border border-border rounded px-2 py-1 text-xs text-foreground">
+                          <option value="light">{t.light}</option>
+                          <option value="dark">{t.dark}</option>
+                          <option value="system">{t.system}</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-white/50">{t.language}</span>
+                        <div className="flex flex-col gap-1">
+                          <input
+                            list="hirenext-language-options"
+                            value={languageQuery}
+                            onChange={(e) => {
+                              const raw = e.target.value.toLowerCase();
+                              setLanguageQuery(raw);
+                              const matched = LANGUAGE_OPTIONS.find((opt) =>
+                                opt.code === raw || opt.label.toLowerCase().includes(raw)
+                              );
+                              if (matched) setLanguage(matched.code);
+                            }}
+                            placeholder="Search language"
+                            className="bg-input border border-border rounded px-2 py-1 text-xs text-foreground"
+                          />
+                          <datalist id="hirenext-language-options">
+                            {LANGUAGE_OPTIONS.map((opt) => (
+                              <option key={opt.code} value={opt.code}>{opt.label}</option>
+                            ))}
+                          </datalist>
+                        </div>
+                      </div>
                     </div>
 
 
@@ -418,7 +554,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     )}
 
                     {/* Exit Demo (demo sessions only) + Logout (real auth only) — sticky at bottom */}
-                    <div className="sticky bottom-0 px-2 pt-1 pb-2 border-t border-white/[0.07] space-y-0.5" style={{ background: "hsl(240 32% 8% / 0.98)" }}>
+                    <div className="sticky bottom-0 px-2 pt-1 pb-2 border-t border-border/80 space-y-0.5 bg-popover/95">
                       {isDemoMode && (
                         <button
                           onClick={handleExitDemo}
@@ -427,7 +563,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                           <LogOut className="w-4 h-4 text-red-400" />
                           <div className="flex-1 text-left">
                             <span className="text-sm font-semibold text-red-400 block">Exit Demo</span>
-                            <span className="text-[10px] text-white/40">Return to home page</span>
+                            <span className="text-[10px] text-muted-foreground">Return to home page</span>
                           </div>
                         </button>
                       )}
@@ -439,7 +575,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                           <LogOut className="w-4 h-4 text-red-400" />
                           <div className="flex-1 text-left">
                             <span className="text-sm font-semibold text-red-400 block">Logout</span>
-                            <span className="text-[10px] text-white/40">Clear session and return home</span>
+                            <span className="text-[10px] text-muted-foreground">Clear session and return home</span>
                           </div>
                         </button>
                       )}
@@ -452,7 +588,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               {/* Mobile Hamburger — only on very small screens */}
               <button
                 onClick={() => setIsMobileMenuOpen(true)}
-                className="sm:hidden p-1.5 text-white/70 hover:text-white hover:bg-white/[0.09] rounded-lg transition-colors"
+                className="sm:hidden p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
               >
                 <Menu className="w-5 h-5" />
               </button>

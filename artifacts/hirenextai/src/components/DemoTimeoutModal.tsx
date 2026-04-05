@@ -112,7 +112,7 @@ export function DemoTimeoutModal() {
                   </h2>
 
                   <p className="text-white/60 text-sm leading-relaxed mb-2 max-w-xs mx-auto">
-                    Your 2-minute demo has expired.
+                    Your 5-minute demo has expired.
                   </p>
                   <p className="text-white/80 text-sm leading-relaxed mb-7 max-w-xs mx-auto font-medium">
                     Create a free account to continue exploring HirenextAI — no credit card required.

@@ -6,10 +6,12 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Users, Briefcase, FileText, TicketCheck, X, Send, RefreshCw,
   TrendingUp, AlertCircle, CheckCircle2, Clock, Eye, Zap, Ban,
+  Megaphone,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
+import { publishBroadcast } from "@/lib/broadcast";
 
 const API = import.meta.env.VITE_API_URL ?? "/api";
 
@@ -20,6 +22,7 @@ interface Ticket {
   subject: string;
   message: string;
   status: string;
+  category?: string;
   adminReply: string | null;
   createdAt: string;
   userId: number | null;
@@ -40,14 +43,17 @@ interface GrowthRow { month: string; count: number }
 
 function StatusBadge({ status }: { status: string }) {
   const open = status === "open";
+  const inProgress = status === "in_progress";
   return (
     <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
       open
         ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+        : inProgress
+        ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
         : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
     }`}>
-      {open ? <AlertCircle className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />}
-      {open ? "Open" : "Closed"}
+      {open ? <AlertCircle className="w-3 h-3" /> : inProgress ? <Clock className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />}
+      {open ? "Open" : inProgress ? "In Progress" : "Resolved"}
     </span>
   );
 }
@@ -101,7 +107,17 @@ export default function AdminDashboard() {
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "closed">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "in_progress" | "resolved">("all");
+  const [ticketGrowth, setTicketGrowth] = useState<GrowthRow[]>([]);
+  const [broadcast, setBroadcast] = useState({
+    title: "",
+    message: "",
+    audience: "all",
+    email: true,
+    durationMs: 7000,
+    dismissible: true,
+  });
+  const [sendingBroadcast, setSendingBroadcast] = useState(false);
 
   const authHeaders = () => ({
     "Content-Type": "application/json",
@@ -120,6 +136,8 @@ export default function AdminDashboard() {
       if (ticketsRes.ok) setTickets(await ticketsRes.json());
       if (statsRes.ok) setStats(await statsRes.json());
       if (growthRes.ok) setGrowth(await growthRes.json());
+      const supportRes = await fetch(`${API}/support/metrics/monthly`, { headers: authHeaders() });
+      if (supportRes.ok) setTicketGrowth(await supportRes.json());
     } catch {
       toast({ title: "Failed to load dashboard data", variant: "destructive" });
     } finally {
@@ -140,9 +158,9 @@ export default function AdminDashboard() {
         body: JSON.stringify({ reply }),
       });
       if (!res.ok) throw new Error();
-      toast({ title: "Reply sent", description: "Ticket marked as closed." });
+      toast({ title: "Reply sent", description: "Ticket marked as resolved." });
       setTickets(prev =>
-        prev.map(t => t.id === selectedTicket.id ? { ...t, adminReply: reply, status: "closed" } : t)
+        prev.map(t => t.id === selectedTicket.id ? { ...t, adminReply: reply, status: "resolved" } : t)
       );
       setSelectedTicket(null);
       setReply("");
@@ -157,6 +175,37 @@ export default function AdminDashboard() {
   const filteredTickets = tickets.filter(t =>
     statusFilter === "all" ? true : t.status === statusFilter
   );
+
+  const sendBroadcast = async () => {
+    if (!broadcast.title.trim() || !broadcast.message.trim()) return;
+    setSendingBroadcast(true);
+    try {
+      const res = await fetch(`${API}/admin/notifications/send`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          title: broadcast.title,
+          message: broadcast.message,
+          audience: broadcast.audience,
+          channels: broadcast.email ? ["in_app", "email"] : ["in_app"],
+        }),
+      });
+      if (!res.ok) throw new Error();
+      publishBroadcast({
+        title: broadcast.title.trim(),
+        message: broadcast.message.trim(),
+        audience: broadcast.audience as "all" | "job_seeker" | "recruiter",
+        durationMs: Math.max(3000, Math.min(30000, Number(broadcast.durationMs) || 7000)),
+        dismissible: !!broadcast.dismissible,
+      });
+      toast({ title: "Broadcast sent successfully" });
+      setBroadcast({ title: "", message: "", audience: "all", email: true, durationMs: 7000, dismissible: true });
+    } catch {
+      toast({ title: "Failed to send broadcast", variant: "destructive" });
+    } finally {
+      setSendingBroadcast(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -238,6 +287,57 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="glass-card p-6">
+          <h3 className="text-sm font-semibold text-white mb-4">Support Tickets (6 months)</h3>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={ticketGrowth} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <XAxis dataKey="month" tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar dataKey="count" name="Tickets" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="glass-card p-6">
+          <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><Megaphone className="w-4 h-4" />Admin Notification Panel</h3>
+          <div className="space-y-3">
+            <input value={broadcast.title} onChange={(e) => setBroadcast((p) => ({ ...p, title: e.target.value }))} className="w-full p-2.5 rounded-lg bg-input border border-border text-foreground" placeholder="Update title" />
+            <textarea value={broadcast.message} onChange={(e) => setBroadcast((p) => ({ ...p, message: e.target.value }))} className="w-full p-2.5 rounded-lg bg-input border border-border text-foreground min-h-[100px]" placeholder="Message to users" />
+            <div className="flex flex-wrap items-center gap-3">
+              <select value={broadcast.audience} onChange={(e) => setBroadcast((p) => ({ ...p, audience: e.target.value }))} className="p-2 rounded-lg bg-input border border-border text-sm">
+                <option value="all">All users</option>
+                <option value="job_seeker">Job seekers</option>
+                <option value="recruiter">Recruiters</option>
+              </select>
+              <label className="text-sm text-white/70 flex items-center gap-2">
+                <input type="checkbox" checked={broadcast.email} onChange={(e) => setBroadcast((p) => ({ ...p, email: e.target.checked }))} />
+                Send email too
+              </label>
+              <label className="text-sm text-white/70 flex items-center gap-2">
+                Duration (sec)
+                <input
+                  type="number"
+                  min={3}
+                  max={30}
+                  value={Math.round((broadcast.durationMs ?? 7000) / 1000)}
+                  onChange={(e) => setBroadcast((p) => ({ ...p, durationMs: Number(e.target.value || 7) * 1000 }))}
+                  className="w-16 p-1.5 rounded-lg bg-input border border-border text-foreground"
+                />
+              </label>
+              <label className="text-sm text-white/70 flex items-center gap-2">
+                <input type="checkbox" checked={broadcast.dismissible} onChange={(e) => setBroadcast((p) => ({ ...p, dismissible: e.target.checked }))} />
+                Dismissible
+              </label>
+            </div>
+            <button disabled={sendingBroadcast} onClick={sendBroadcast} className="px-4 py-2 rounded-lg bg-primary/20 border border-primary/30 text-primary text-sm font-medium disabled:opacity-50">
+              {sendingBroadcast ? "Sending..." : "Send notification"}
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Support Tickets */}
       <div className="glass-card overflow-hidden">
         <div className="flex items-center justify-between p-5 border-b border-white/[0.07]">
@@ -246,7 +346,7 @@ export default function AdminDashboard() {
             Support Tickets
           </h2>
           <div className="flex gap-1">
-            {(["all", "open", "closed"] as const).map(f => (
+            {(["all", "open", "in_progress", "resolved"] as const).map(f => (
               <button
                 key={f}
                 onClick={() => setStatusFilter(f)}

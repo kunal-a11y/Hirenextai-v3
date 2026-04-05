@@ -92,15 +92,15 @@ export default function ProfileCompletionPopup({ profile, user, onCompleteNow, o
 
   return (
     <AnimatePresence>
-      <div className="fixed bottom-4 right-4 z-[9999] sm:bottom-6 sm:right-6" aria-modal="true" role="dialog">
-        {/* Modal - slides in from bottom-right */}
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" aria-modal="true" role="dialog">
+        {/* Modal */}
         <motion.div
           key="modal"
-          initial={{ opacity: 0, y: 40, scale: 0.96 }}
+          initial={{ opacity: 0, y: 20, scale: 0.96 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 40, scale: 0.96 }}
+          exit={{ opacity: 0, y: 20, scale: 0.96 }}
           transition={{ type: "spring", duration: 0.45, bounce: 0.2 }}
-          className="relative w-[340px] sm:w-[380px] flex flex-col bg-[#0f0f14] border border-white/10 rounded-2xl shadow-[0_24px_80px_rgba(0,0,0,0.8)] overflow-hidden"
+          className="relative w-[340px] sm:w-[420px] flex flex-col bg-[#0f0f14] border border-white/10 rounded-2xl shadow-[0_24px_80px_rgba(0,0,0,0.8)] overflow-hidden"
           style={{ maxHeight: "80vh" }}
         >
           {/* Top gradient bar */}
