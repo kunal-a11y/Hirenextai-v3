@@ -4,10 +4,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Briefcase, Users, Eye, BarChart3, Plus, ChevronRight, ExternalLink,
   Loader2, CheckCircle2, XCircle, Clock, Building2, MapPin, Trash2,
-  ThumbsUp, ThumbsDown, FileText, Mail, Phone, Star, Calendar, Pencil, Zap,
+  ThumbsUp, ThumbsDown, FileText, Mail, Phone, Star, Calendar, Pencil, Zap, ChevronDown, LifeBuoy, CreditCard,
 } from "lucide-react";
 import { useAuthStore } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 
 const API = import.meta.env.VITE_API_URL ?? "/api";
 
@@ -95,6 +96,7 @@ function ApplicantCard({
   const token = useAuthStore(s => s.token);
   const { toast } = useToast();
   const [expanded, setExpanded] = useState(false);
+  const profileSkills = applicant.profile?.skills ?? [];
 
   const initials = applicant.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 
@@ -125,13 +127,13 @@ function ApplicantCard({
       </div>
 
       {/* Skills */}
-      {applicant.profile?.skills?.length > 0 && (
+      {profileSkills.length > 0 && (
         <div className="flex flex-wrap gap-1 mt-3">
-          {applicant.profile.skills.slice(0, 5).map(s => (
+          {profileSkills.slice(0, 5).map(s => (
             <span key={s} className="px-2 py-0.5 rounded-full bg-white/[0.05] border border-white/[0.08] text-xs text-white/50">{s}</span>
           ))}
-          {applicant.profile.skills.length > 5 && (
-            <span className="text-xs text-white/25">+{applicant.profile.skills.length - 5} more</span>
+          {profileSkills.length > 5 && (
+            <span className="text-xs text-white/25">+{profileSkills.length - 5} more</span>
           )}
         </div>
       )}
@@ -250,7 +252,9 @@ function ApplicantCard({
 export default function RecruiterDashboard() {
   const [, setLocation] = useLocation();
   const token = useAuthStore(s => s.token);
+  const { user } = useAuth();
   const { toast } = useToast();
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [jobs, setJobs] = useState<RecruiterJob[]>([]);
@@ -331,12 +335,50 @@ export default function RecruiterDashboard() {
           <h1 className="text-2xl font-bold text-white">Recruiter Dashboard</h1>
           <p className="text-sm text-white/40 mt-1">Manage your job posts and applicants</p>
         </div>
-        <button
-          onClick={() => setLocation("/dashboard/recruiter/post-job")}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-sm font-semibold hover:opacity-90 transition-all shadow-[0_0_16px_rgba(168,85,247,0.3)]"
-        >
-          <Plus className="w-4 h-4" /> Post a Job
-        </button>
+        <div className="flex items-center gap-2 relative">
+          <button
+            onClick={() => setProfileMenuOpen((v) => !v)}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-white/80 hover:bg-white/10"
+          >
+            <span className="w-7 h-7 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-xs font-bold">
+              {(user?.name ?? "R").slice(0, 1).toUpperCase()}
+            </span>
+            <span className="text-sm hidden sm:inline">{user?.name ?? "Recruiter"}</span>
+            <ChevronDown className={`w-4 h-4 transition-transform ${profileMenuOpen ? "rotate-180" : ""}`} />
+          </button>
+          {profileMenuOpen && (
+            <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-border bg-popover shadow-xl p-1 z-20">
+              <button onClick={() => { setProfileMenuOpen(false); setLocation("/dashboard/recruiter/profile"); }} className="w-full text-left px-3 py-2 rounded-lg text-sm text-foreground hover:bg-muted">Profile settings</button>
+              <button onClick={() => { setProfileMenuOpen(false); setLocation("/dashboard/support"); }} className="w-full text-left px-3 py-2 rounded-lg text-sm text-foreground hover:bg-muted">Support center</button>
+              <button onClick={() => { setProfileMenuOpen(false); setLocation("/dashboard/subscription"); }} className="w-full text-left px-3 py-2 rounded-lg text-sm text-foreground hover:bg-muted">Billing & plans</button>
+            </div>
+          )}
+          <button
+            onClick={() => setLocation("/dashboard/recruiter/post-job")}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-sm font-semibold hover:opacity-90 transition-all shadow-[0_0_16px_rgba(168,85,247,0.3)]"
+          >
+            <Plus className="w-4 h-4" /> Post a Job
+          </button>
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-3 gap-3 mb-6">
+        <div className="glass-card rounded-xl border border-white/[0.08] p-4">
+          <p className="text-xs uppercase tracking-wide text-white/40 mb-1">Current Plan</p>
+          <p className="text-lg font-semibold text-white capitalize">{user?.subscriptionPlan ?? "free"}</p>
+          <p className="text-xs text-white/40 mt-1">Upgrade to unlock more applications and boosts.</p>
+          <button onClick={() => setLocation("/dashboard/subscription")} className="mt-3 w-full py-2 rounded-lg bg-primary/20 border border-primary/30 text-primary text-sm font-medium">Choose paid plan</button>
+        </div>
+        <div className="glass-card rounded-xl border border-white/[0.08] p-4">
+          <p className="text-xs uppercase tracking-wide text-white/40 mb-1">Billing</p>
+          <p className="text-sm text-white/70 mb-3">Manage invoices, renewal dates, and payment method.</p>
+          <button onClick={() => setLocation("/dashboard/subscription")} className="w-full py-2 rounded-lg border border-white/10 bg-white/5 text-white/80 text-sm hover:bg-white/10 inline-flex items-center justify-center gap-2"><CreditCard className="w-4 h-4" /> Open billing</button>
+        </div>
+        <div className="glass-card rounded-xl border border-white/[0.08] p-4">
+          <p className="text-xs uppercase tracking-wide text-white/40 mb-1">Support</p>
+          <p className="text-sm text-white/70 mb-3">Need help with jobs, plans, or applicants?</p>
+          <button onClick={() => setLocation("/dashboard/support")} className="w-full py-2 rounded-lg border border-white/10 bg-white/5 text-white/80 text-sm hover:bg-white/10 inline-flex items-center justify-center gap-2"><LifeBuoy className="w-4 h-4" /> Contact support</button>
+        </div>
       </div>
 
       {/* Analytics */}

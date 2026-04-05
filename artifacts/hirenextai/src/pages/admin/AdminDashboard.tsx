@@ -11,6 +11,7 @@ import {
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
+import { publishBroadcast } from "@/lib/broadcast";
 
 const API = import.meta.env.VITE_API_URL ?? "/api";
 
@@ -108,7 +109,15 @@ export default function AdminDashboard() {
   const [sending, setSending] = useState(false);
   const [statusFilter, setStatusFilter] = useState<"all" | "open" | "in_progress" | "resolved">("all");
   const [ticketGrowth, setTicketGrowth] = useState<GrowthRow[]>([]);
-  const [broadcast, setBroadcast] = useState({ title: "", message: "", audience: "all", email: true });
+  const [broadcast, setBroadcast] = useState({
+    title: "",
+    message: "",
+    audience: "all",
+    email: true,
+    durationMs: 7000,
+    dismissible: true,
+  });
+  const [sendingBroadcast, setSendingBroadcast] = useState(false);
 
   const authHeaders = () => ({
     "Content-Type": "application/json",
@@ -169,6 +178,7 @@ export default function AdminDashboard() {
 
   const sendBroadcast = async () => {
     if (!broadcast.title.trim() || !broadcast.message.trim()) return;
+    setSendingBroadcast(true);
     try {
       const res = await fetch(`${API}/admin/notifications/send`, {
         method: "POST",
@@ -181,10 +191,19 @@ export default function AdminDashboard() {
         }),
       });
       if (!res.ok) throw new Error();
+      publishBroadcast({
+        title: broadcast.title.trim(),
+        message: broadcast.message.trim(),
+        audience: broadcast.audience as "all" | "job_seeker" | "recruiter",
+        durationMs: Math.max(3000, Math.min(30000, Number(broadcast.durationMs) || 7000)),
+        dismissible: !!broadcast.dismissible,
+      });
       toast({ title: "Broadcast sent successfully" });
-      setBroadcast({ title: "", message: "", audience: "all", email: true });
+      setBroadcast({ title: "", message: "", audience: "all", email: true, durationMs: 7000, dismissible: true });
     } catch {
       toast({ title: "Failed to send broadcast", variant: "destructive" });
+    } finally {
+      setSendingBroadcast(false);
     }
   };
 
@@ -284,10 +303,10 @@ export default function AdminDashboard() {
         <div className="glass-card p-6">
           <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2"><Megaphone className="w-4 h-4" />Admin Notification Panel</h3>
           <div className="space-y-3">
-            <input value={broadcast.title} onChange={(e) => setBroadcast((p) => ({ ...p, title: e.target.value }))} className="w-full p-2.5 rounded-lg bg-white/5 border border-white/10" placeholder="Update title" />
-            <textarea value={broadcast.message} onChange={(e) => setBroadcast((p) => ({ ...p, message: e.target.value }))} className="w-full p-2.5 rounded-lg bg-white/5 border border-white/10 min-h-[100px]" placeholder="Message to users" />
-            <div className="flex items-center gap-3">
-              <select value={broadcast.audience} onChange={(e) => setBroadcast((p) => ({ ...p, audience: e.target.value }))} className="p-2 rounded-lg bg-white/5 border border-white/10 text-sm">
+            <input value={broadcast.title} onChange={(e) => setBroadcast((p) => ({ ...p, title: e.target.value }))} className="w-full p-2.5 rounded-lg bg-input border border-border text-foreground" placeholder="Update title" />
+            <textarea value={broadcast.message} onChange={(e) => setBroadcast((p) => ({ ...p, message: e.target.value }))} className="w-full p-2.5 rounded-lg bg-input border border-border text-foreground min-h-[100px]" placeholder="Message to users" />
+            <div className="flex flex-wrap items-center gap-3">
+              <select value={broadcast.audience} onChange={(e) => setBroadcast((p) => ({ ...p, audience: e.target.value }))} className="p-2 rounded-lg bg-input border border-border text-sm">
                 <option value="all">All users</option>
                 <option value="job_seeker">Job seekers</option>
                 <option value="recruiter">Recruiters</option>
@@ -296,8 +315,25 @@ export default function AdminDashboard() {
                 <input type="checkbox" checked={broadcast.email} onChange={(e) => setBroadcast((p) => ({ ...p, email: e.target.checked }))} />
                 Send email too
               </label>
+              <label className="text-sm text-white/70 flex items-center gap-2">
+                Duration (sec)
+                <input
+                  type="number"
+                  min={3}
+                  max={30}
+                  value={Math.round((broadcast.durationMs ?? 7000) / 1000)}
+                  onChange={(e) => setBroadcast((p) => ({ ...p, durationMs: Number(e.target.value || 7) * 1000 }))}
+                  className="w-16 p-1.5 rounded-lg bg-input border border-border text-foreground"
+                />
+              </label>
+              <label className="text-sm text-white/70 flex items-center gap-2">
+                <input type="checkbox" checked={broadcast.dismissible} onChange={(e) => setBroadcast((p) => ({ ...p, dismissible: e.target.checked }))} />
+                Dismissible
+              </label>
             </div>
-            <button onClick={sendBroadcast} className="px-4 py-2 rounded-lg bg-primary/20 border border-primary/30 text-primary text-sm font-medium">Send notification</button>
+            <button disabled={sendingBroadcast} onClick={sendBroadcast} className="px-4 py-2 rounded-lg bg-primary/20 border border-primary/30 text-primary text-sm font-medium disabled:opacity-50">
+              {sendingBroadcast ? "Sending..." : "Send notification"}
+            </button>
           </div>
         </div>
       </div>

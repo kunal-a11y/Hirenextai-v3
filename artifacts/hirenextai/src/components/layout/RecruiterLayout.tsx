@@ -35,8 +35,8 @@ function RecruiterNavItem({
       <span
         className={`relative flex items-center gap-2 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-all whitespace-nowrap cursor-pointer select-none
           ${active
-            ? "text-white bg-white/10"
-            : "text-white/50 hover:text-white/80 hover:bg-white/5"
+            ? "text-foreground bg-accent"
+            : "text-muted-foreground hover:text-foreground hover:bg-muted"
           }`}
       >
         <Icon className="w-3.5 h-3.5 shrink-0" />
@@ -44,7 +44,7 @@ function RecruiterNavItem({
         {active && (
           <motion.div
             layoutId="recruiter-nav-indicator"
-            className="absolute inset-0 rounded-lg border border-white/10 bg-white/[0.07]"
+            className="absolute inset-0 rounded-lg border border-border bg-accent/70"
             style={{ zIndex: -1 }}
             transition={{ type: "spring", stiffness: 400, damping: 30 }}
           />
@@ -58,12 +58,12 @@ export function RecruiterLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
 
   const initials = user?.name
-    ? user.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()
+    ? user.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()
     : "R";
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <header className="h-14 shrink-0 border-b border-white/[0.07] bg-[#0d0c14]/80 backdrop-blur-xl sticky top-0 z-40">
+      <header className="h-14 shrink-0 border-b border-border bg-background/95 backdrop-blur-xl sticky top-0 z-40">
         <div className="h-full max-w-[1200px] mx-auto px-4 flex items-center gap-2">
           {/* Logo + recruiter badge */}
           <div className="flex items-center gap-2 shrink-0 mr-1">
@@ -74,7 +74,7 @@ export function RecruiterLayout({ children }: { children: React.ReactNode }) {
             </span>
           </div>
 
-          <ChevronRight className="w-3.5 h-3.5 text-white/20 shrink-0" />
+          <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" />
 
           {/* Nav links — scrollable */}
           <nav className="flex items-center gap-0.5 overflow-x-auto scrollbar-none flex-1 min-w-0">
@@ -85,12 +85,12 @@ export function RecruiterLayout({ children }: { children: React.ReactNode }) {
 
           {/* Right: avatar + logout */}
           <div className="flex items-center gap-2 shrink-0">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500/60 to-indigo-600/60 flex items-center justify-center text-xs font-bold text-white select-none border border-white/10">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500/70 to-indigo-600/70 flex items-center justify-center text-xs font-bold text-white select-none border border-border">
               {initials}
             </div>
             <button
               onClick={logout}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-white/40 hover:text-white hover:bg-white/5 transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
             >
               <LogOut className="w-4 h-4" />
               <span className="hidden sm:inline">Logout</span>

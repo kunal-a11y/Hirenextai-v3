@@ -68,7 +68,7 @@ export function useAuth() {
       enabled: !!token,
       retry: false,
       staleTime: 30000,
-    }
+    } as any,
   });
 
   const loginMutation = useLogin({

@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth, useAuthStore } from "@/hooks/use-auth";
 import { useDemoStore } from "@/store/demo";
 import { useEffect, useLayoutEffect } from "react";
 import LoginSuccess from "./pages/LoginSuccess";

@@ -3,6 +3,7 @@ import DOMPurify from "dompurify";
 import { useDemoStore } from "@/store/demo";
 import { useAuthStore } from "@/hooks/use-auth";
 import RecommendedJobs, { type RecommendedJob } from "@/components/RecommendedJobs";
+import { translateToEnglish } from "@/lib/translation";
 import {
   useGetJobs, useCreateApplication,
   useGenerateCoverLetter, useGenerateRecruiterMessage,
@@ -411,7 +412,6 @@ export default function Jobs() {
   const backendSortBy = sortBy === "relevant" ? undefined : sortBy !== "latest" ? sortBy : undefined;
 
   const { data, isLoading, refetch } = useGetJobs({
-    query: {
       search: debouncedSearch || undefined,
       keyword: debouncedSearch || undefined,
       category: category || undefined,
@@ -425,8 +425,7 @@ export default function Jobs() {
       sortBy: backendSortBy as any,
       skills: skillsFilter.length > 0 ? skillsFilter.join(",") as any : undefined,
       limit: fetchLimit as any,
-    } as any,
-  });
+    } as any);
 
   const rawJobs = (data?.jobs ?? []) as LiveJobType[];
 
@@ -1443,7 +1442,21 @@ function sanitizeDescription(raw: string): { html: string; isHtml: boolean } {
 /* ─── Expandable HTML description ───────────────────────────────────────── */
 function JobDescription({ text }: { text: string }) {
   const [expanded, setExpanded] = useState(false);
-  const { html } = useMemo(() => sanitizeDescription(text), [text]);
+  const [translatedText, setTranslatedText] = useState(text);
+  const [autoTranslated, setAutoTranslated] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const translated = await translateToEnglish(text);
+      if (!mounted) return;
+      setTranslatedText(translated);
+      setAutoTranslated(translated !== text);
+    })();
+    return () => { mounted = false; };
+  }, [text]);
+
+  const { html } = useMemo(() => sanitizeDescription(translatedText), [translatedText]);
 
   if (!html) {
     return <p className="text-sm text-white/40 italic">No description available.</p>;
@@ -1451,6 +1464,9 @@ function JobDescription({ text }: { text: string }) {
 
   return (
     <div>
+      {autoTranslated && (
+        <p className="text-[11px] text-amber-400/80 mb-2">Auto-translated to English</p>
+      )}
       <div className="relative">
         <div
           className={`job-desc overflow-hidden transition-all duration-500 ${expanded ? "" : "max-h-56"}`}
@@ -1537,12 +1553,13 @@ function JobDetailModal({ job, onClose, isSaved, onToggleSave }: {
     <>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <motion.div
         initial={{ opacity: 0, scale: 0.96, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 20 }}
         transition={{ type: "spring", bounce: 0.1, duration: 0.4 }}
-        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[calc(100vw-2rem)] max-w-2xl h-[90vh] max-h-[90vh] flex flex-col glass-panel rounded-3xl overflow-hidden"
+        className="w-full max-w-2xl h-[90vh] max-h-[90vh] flex flex-col glass-panel rounded-3xl overflow-hidden"
       >
         {/* Header */}
         <div className="px-5 py-4 border-b border-white/5 flex items-start justify-between gap-3 shrink-0">
@@ -1787,7 +1804,7 @@ function JobDetailModal({ job, onClose, isSaved, onToggleSave }: {
           )}
         </div>
       </motion.div>
+      </div>
     </>
   );
 }
-
